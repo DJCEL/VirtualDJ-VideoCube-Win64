@@ -8,11 +8,13 @@ CVideoCube::CVideoCube()
 	pVertexBuffer = nullptr;
 	pD3DRenderTargetView = nullptr;
 	pVertexShader = nullptr;
+	pIndexBuffer = nullptr;
 	pPixelShader = nullptr;
 	pConstantBuffer = nullptr;
 	pInputLayout = nullptr;
 	pRasterizerState = nullptr;
 	ZeroMemory(pNewVertices, 36 * sizeof(TLVERTEX));
+	ZeroMemory(pIndices, 36 * sizeof(UINT));
 	ZeroMemory(&m_ConstantBufferData, sizeof(VS_CONSTANTBUFFER));
 	ZeroMemory(&m_SliderValue, 4 * sizeof(float));
 	m_Direct3D_On = false;
@@ -21,6 +23,7 @@ CVideoCube::CVideoCube()
 	m_Width = 0;
 	m_Height = 0;
 	m_VertexCount = 0;
+	m_IndexCount = 0;
 	m_Alpha = 1.0f;
 	m_Zoom = 0.0f;
 	m_Speed = 0.0f;
@@ -244,6 +247,9 @@ HRESULT CVideoCube::Initialize_D3D11(ID3D11Device* pDevice)
 	hr = Create_VertexShader_D3D11(pDevice);
 	if (hr != S_OK) return S_FALSE;
 
+	hr = Create_IndexBufferDynamic_D3D11(pDevice);
+	if (hr != S_OK) return S_FALSE;
+
 	hr = Create_PixelShader_D3D11(pDevice);
 	if (hr != S_OK) return S_FALSE;
 
@@ -265,6 +271,7 @@ HRESULT CVideoCube::Initialize_D3D11(ID3D11Device* pDevice)
 void CVideoCube::Release_D3D11()
 {
 	SAFE_RELEASE(pVertexShader);
+	SAFE_RELEASE(pIndexBuffer);
 	SAFE_RELEASE(pPixelShader);
 	SAFE_RELEASE(pInputLayout);
 	SAFE_RELEASE(pVertexBuffer);
@@ -358,9 +365,11 @@ HRESULT CVideoCube::Rendering_D3D11(ID3D11Device* pDevice, ID3D11DeviceContext* 
 		UINT m_VertexStride = sizeof(TLVERTEX);
 		UINT m_VertexOffset = 0;
 		pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &m_VertexStride, &m_VertexOffset);
+		//pDeviceContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0); // we use R32 car UNINT (for unsigned short, use R16)
 	}
 
 	pDeviceContext->Draw(m_VertexCount, 0);
+	//pDeviceContext->DrawIndexed(m_IndexCount, 0, 0);
 
 	return S_OK;
 }
@@ -379,14 +388,41 @@ HRESULT CVideoCube::Create_VertexBufferDynamic_D3D11(ID3D11Device* pDevice)
 	ZeroMemory(&VertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
 	VertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;   // CPU_Access=Write_Only & GPU_Access=Read_Only
 	VertexBufferDesc.ByteWidth = sizeof(TLVERTEX) * m_VertexCount;
-	VertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER; // Use as vertex buffer  // or D3D11_BIND_INDEX_BUFFER
+	VertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER; // Use as vertex buffer
 	VertexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; // Allow CPU to write in buffer
 	VertexBufferDesc.MiscFlags = 0;
-	VertexBufferDesc.StructureByteStride = 0;
+	VertexBufferDesc.StructureByteStride = sizeof(TLVERTEX);
+
 
 	// Create the vertex buffer.
 	hr = pDevice->CreateBuffer(&VertexBufferDesc, nullptr, &pVertexBuffer);
 	if (hr != S_OK || !pVertexBuffer) return S_FALSE;
+
+	return S_OK;
+}
+// ---------------------------------------------------------------------- -
+HRESULT CVideoCube::Create_IndexBufferDynamic_D3D11(ID3D11Device* pDevice)
+{
+	HRESULT hr = S_FALSE;
+
+	if (!pDevice) return E_FAIL;
+
+	// Set the number of indices in the vertex array.
+	m_IndexCount = 36; // = ARRAYSIZE(pIndices);
+
+	// Fill in a buffer description.
+	D3D11_BUFFER_DESC IndexBufferDesc;
+	ZeroMemory(&IndexBufferDesc, sizeof(D3D11_BUFFER_DESC));
+	IndexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;   // CPU_Access=Write_Only & GPU_Access=Read_Only
+	IndexBufferDesc.ByteWidth = sizeof(UINT) * m_IndexCount;
+	IndexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER; // Use as indexed vertex buffer
+	IndexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; // Allow CPU to write in buffer
+	IndexBufferDesc.MiscFlags = 0;
+	IndexBufferDesc.StructureByteStride = sizeof(UINT);
+
+	// Create the index buffer.
+	hr = pDevice->CreateBuffer(&IndexBufferDesc, nullptr, &pIndexBuffer);
+	if (hr != S_OK || !pIndexBuffer) return S_FALSE;
 
 	return S_OK;
 }
@@ -485,9 +521,9 @@ HRESULT CVideoCube::Create_RasterizerState_D3D11(ID3D11Device* pDevice)
 	D3D11_RASTERIZER_DESC RasterizerDesc;
 	ZeroMemory(&RasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 	RasterizerDesc.FillMode = D3D11_FILL_SOLID;
-	RasterizerDesc.CullMode = D3D11_CULL_BACK; // cull back faces (D3D11_CULL_FRONT or D3D11_CULL_BACK or D3D11_CULL_NONE); 
+	RasterizerDesc.CullMode = D3D11_CULL_NONE; // cull back faces (D3D11_CULL_FRONT or D3D11_CULL_BACK or D3D11_CULL_NONE); 
 	RasterizerDesc.FrontCounterClockwise = TRUE; // CCW = front
-	//RasterizerDesc.DepthClipEnable = TRUE;
+	RasterizerDesc.DepthClipEnable = TRUE;
 
 	hr = pDevice->CreateRasterizerState(&RasterizerDesc, &pRasterizerState);
 	if (hr != S_OK || !pRasterizerState) return S_FALSE;
@@ -513,6 +549,28 @@ HRESULT CVideoCube::Update_VertexBufferDynamic_D3D11(ID3D11DeviceContext* ctx)
 	memcpy(MappedSubResource.pData, pNewVertices, m_VertexCount * sizeof(TLVERTEX));
 
 	ctx->Unmap(pVertexBuffer, NULL);
+
+	return S_OK;
+}
+//-----------------------------------------------------------------------
+HRESULT CVideoCube::Update_IndexBufferDynamic_D3D11(ID3D11DeviceContext* ctx)
+{
+	HRESULT hr = S_FALSE;
+
+	if (!ctx) return S_FALSE;
+	if (!pIndexBuffer) return S_FALSE;
+
+	hr = Update_Indices_D3D11();
+
+	D3D11_MAPPED_SUBRESOURCE MappedSubResource;
+	ZeroMemory(&MappedSubResource, sizeof(D3D11_MAPPED_SUBRESOURCE));
+
+	hr = ctx->Map(pIndexBuffer, NULL, D3D11_MAP_WRITE_DISCARD, 0, &MappedSubResource);
+	if (hr != S_OK) return S_FALSE;
+
+	memcpy(MappedSubResource.pData, pIndices, m_IndexCount * sizeof(UINT));
+
+	ctx->Unmap(pIndexBuffer, NULL);
 
 	return S_OK;
 }
@@ -591,7 +649,12 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 
 	memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
 
-	unsigned short indices[] =
+	return S_OK;
+}
+//-----------------------------------------------------------------------
+HRESULT CVideoCube::Update_Indices_D3D11()
+{
+	UINT indicesCube[36] =
 	{
 		// Front face
 		0, 1, 2, 0, 2, 3,
@@ -606,7 +669,9 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 	   // Bottom face
 	   20,21,22,20,22,23
 	};
-	
+
+	memcpy(pIndices, indicesCube, m_IndexCount * sizeof(UINT));
+
 	return S_OK;
 }
 //-----------------------------------------------------------------------
@@ -786,7 +851,7 @@ DirectX::XMMATRIX CVideoCube::SetWorldMatrix_D3D11()
 	}
 
 	// Center point of the rotation
-	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , 0.0f };
+	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , (float)m_Width };
 
 	DirectX::XMMATRIX TranslationMatrix1 = DirectX::XMMatrixTranslation(-Co.x, -Co.y, -Co.z);
 	DirectX::XMMATRIX TranslationMatrix2 = DirectX::XMMatrixTranslation(Co.x, Co.y, Co.z);

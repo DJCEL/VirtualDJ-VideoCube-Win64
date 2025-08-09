@@ -92,6 +92,7 @@ private:
 	HRESULT Rendering_D3D11(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, ID3D11RenderTargetView* pRenderTargetView, ID3D11ShaderResourceView* pTextureView, TVertex8* pVertices);
 	HRESULT Create_InputLayout_D3D11(ID3D11Device* pDevice);
 	HRESULT Create_VertexBufferDynamic_D3D11(ID3D11Device* pDevice);
+	HRESULT Create_IndexBufferDynamic_D3D11(ID3D11Device* pDevice);
 	HRESULT Create_ConstantBufferDynamic_D3D11(ID3D11Device* pDevice);
 	HRESULT Create_VertexShader_D3D11(ID3D11Device* pDevice);
 	HRESULT Create_PixelShader_D3D11(ID3D11Device* pDevice);
@@ -99,8 +100,10 @@ private:
 	HRESULT Create_PixelShaderFromResourceCSOFile_D3D11(ID3D11Device* pDevice, const WCHAR* resourceType, const WCHAR* resourceName);
 	HRESULT Create_RasterizerState_D3D11(ID3D11Device* pDevice);
 	HRESULT Update_VertexBufferDynamic_D3D11(ID3D11DeviceContext* ctx);
+	HRESULT Update_IndexBufferDynamic_D3D11(ID3D11DeviceContext* ctx);
 	HRESULT Update_ConstantBufferDynamic_D3D11(ID3D11DeviceContext* ctx);
 	HRESULT Update_NewVertices_D3D11();
+	HRESULT Update_Indices_D3D11();
 	HRESULT Update_ConstantBufferData_D3D11();
 	HRESULT GetInfoFromShaderResourceView(ID3D11ShaderResourceView* pShaderResourceView, InfoTexture2D* info);
 	HRESULT GetInfoFromRenderTargetView(ID3D11RenderTargetView* pRenderTargetView, InfoTexture2D* info);
@@ -113,6 +116,7 @@ private:
 	ID3D11DeviceContext* pD3DDeviceContext;
 	ID3D11RenderTargetView* pD3DRenderTargetView;
 	ID3D11Buffer* pVertexBuffer;
+	ID3D11Buffer* pIndexBuffer;
 	ID3D11Buffer* pConstantBuffer;
 	ID3D11InputLayout* pInputLayout;
 	ID3D11VertexShader* pVertexShader;
@@ -122,7 +126,9 @@ private:
 	VS_CONSTANTBUFFER m_ConstantBufferData;
 
 	TLVERTEX pNewVertices[36];
+	UINT pIndices[36];
 	UINT m_VertexCount;
+	UINT m_IndexCount;
 	bool m_Direct3D_On;
 	int m_WidthOnDeviceInit;
 	int m_HeightOnDeviceInit;
