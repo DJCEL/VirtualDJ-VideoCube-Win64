@@ -523,7 +523,7 @@ HRESULT CVideoCube::Create_RasterizerState_D3D11(ID3D11Device* pDevice)
 	RasterizerDesc.FillMode = D3D11_FILL_SOLID;
 	RasterizerDesc.CullMode = D3D11_CULL_NONE; // cull back faces (D3D11_CULL_FRONT or D3D11_CULL_BACK or D3D11_CULL_NONE); 
 	RasterizerDesc.FrontCounterClockwise = TRUE; // CCW = front
-	RasterizerDesc.DepthClipEnable = TRUE;
+	RasterizerDesc.DepthClipEnable = FALSE;
 
 	hr = pDevice->CreateRasterizerState(&RasterizerDesc, &pRasterizerState);
 	if (hr != S_OK || !pRasterizerState) return S_FALSE;
@@ -851,7 +851,7 @@ DirectX::XMMATRIX CVideoCube::SetWorldMatrix_D3D11()
 	}
 
 	// Center point of the rotation
-	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , (float)m_Width };
+	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , (float) m_Width / 2.0f };
 
 	DirectX::XMMATRIX TranslationMatrix1 = DirectX::XMMatrixTranslation(-Co.x, -Co.y, -Co.z);
 	DirectX::XMMATRIX TranslationMatrix2 = DirectX::XMMatrixTranslation(Co.x, Co.y, Co.z);
