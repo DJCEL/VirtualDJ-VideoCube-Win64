@@ -21,8 +21,6 @@ CVideoCube::CVideoCube()
 	m_Width = 0;
 	m_Height = 0;
 	m_VertexCount = 0;
-	m_VertexStride = 0;
-	m_VertexOffset = 0;
 	m_Alpha = 1.0f;
 	m_Zoom = 0.0f;
 	m_Speed = 0.0f;
@@ -357,6 +355,8 @@ HRESULT CVideoCube::Rendering_D3D11(ID3D11Device* pDevice, ID3D11DeviceContext* 
 
 	if (pVertexBuffer)
 	{
+		UINT m_VertexStride = sizeof(TLVERTEX);
+		UINT m_VertexOffset = 0;
 		pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &m_VertexStride, &m_VertexOffset);
 	}
 
@@ -372,10 +372,8 @@ HRESULT CVideoCube::Create_VertexBufferDynamic_D3D11(ID3D11Device* pDevice)
 	if (!pDevice) return E_FAIL;
 
 	// Set the number of vertices in the vertex array.
-	m_VertexStride = sizeof(TLVERTEX);
 	m_VertexCount = 36; // = ARRAYSIZE(pNewVertices);
-	m_VertexOffset = 0;
-
+	
 	// Fill in a buffer description.
 	D3D11_BUFFER_DESC VertexBufferDesc;
 	ZeroMemory(&VertexBufferDesc, sizeof(D3D11_BUFFER_DESC));
@@ -483,11 +481,13 @@ HRESULT CVideoCube::Create_RasterizerState_D3D11(ID3D11Device* pDevice)
 {
 	HRESULT hr;
 
+	// Use back-face culling and counter-clockwise vertices are considered front-facing
 	D3D11_RASTERIZER_DESC RasterizerDesc;
 	ZeroMemory(&RasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 	RasterizerDesc.FillMode = D3D11_FILL_SOLID;
-	RasterizerDesc.CullMode = D3D11_CULL_NONE; // D3D11_CULL_FRONT or D3D11_CULL_BACK; 
-	RasterizerDesc.FrontCounterClockwise = TRUE;
+	RasterizerDesc.CullMode = D3D11_CULL_BACK; // cull back faces (D3D11_CULL_FRONT or D3D11_CULL_BACK or D3D11_CULL_NONE); 
+	RasterizerDesc.FrontCounterClockwise = TRUE; // CCW = front
+	//RasterizerDesc.DepthClipEnable = TRUE;
 
 	hr = pDevice->CreateRasterizerState(&RasterizerDesc, &pRasterizerState);
 	if (hr != S_OK || !pRasterizerState) return S_FALSE;
@@ -543,15 +543,16 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 {
 	float frameWidth = (float) m_Width;
 	float frameHeight = (float) m_Height;
+	float depth = frameWidth; // we use frameWidth as depth
 
-	D3DXPOSITION P1 = { 0.0f, 0.0f, 0.0f }, // Top Left - Front
-		P2 = { frameWidth, 0.0f, 0.0f }, // Top Right - Front
-		P3 = { 0.0f, frameHeight, 0.0f }, // Bottom Left - Front
-		P4 = { frameWidth, frameHeight, 0.0f }, // Bottom Right - Front
-		P5 = { 0.0f, 0.0f, frameWidth }, // Top Left - Back
-		P6 = { frameWidth, 0.0f, frameWidth }, // Top Right - Back
-		P7 = { 0.0f, frameHeight, frameWidth }, // Bottom Left - Back
-		P8 = { frameWidth, frameHeight, frameWidth }; // Bottom Right - Back
+	D3DXPOSITION P1 = { 0.0f, 0.0f, 0.0f }, // Top Left - Front (0,0,0)
+		P2 = { frameWidth, 0.0f, 0.0f }, // Top Right - Front (w,0,0)
+		P3 = { 0.0f, frameHeight, 0.0f }, // Bottom Left - Front (0,h,0)
+		P4 = { frameWidth, frameHeight, 0.0f }, // Bottom Right - Front (w,h,0)
+		P5 = { 0.0f, 0.0f, depth }, // Top Left - Back (0,0,d)
+		P6 = { frameWidth, 0.0f, depth }, // Top Right - Back (w,0,d)
+		P7 = { 0.0f, frameHeight, depth }, // Bottom Left - Back (0,h,d)
+		P8 = { frameWidth, frameHeight, depth }; // Bottom Right - Back (w,h,d)
 	D3DXCOLOR color_vertex = D3DXCOLOR(1.0f, 1.0f, 1.0f, m_Alpha); // white color with alpha
 	D3DXTEXCOORD T1 = { 0.0f , 0.0f },
 		T2 = { 1.0f , 0.0f },
@@ -559,27 +560,52 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 		T4 = { 1.0f , 1.0f };
 	
 
+	// We use COUNTER-CLOCKWISE (CCW) winding for front faces (matches RasterizerDesc.FrontCounterClockwise = TRUE)
+	// Each face is two triangles, made with CCW vertex order as seen from outside the cube.
+
 	TLVERTEX Cube[36] = {
-			{P1,color_vertex,T1}, {P2,color_vertex,T2}, {P3,color_vertex,T3},
-			{P3,color_vertex,T3}, {P2,color_vertex,T2}, {P4,color_vertex,T4},
+		// FRONT face (z = 0) - looking from outside (towards -Z) the CCW order is TL, BL, BR then TL, BR, TR
+		{P1, color_vertex, T1}, {P3, color_vertex, T3}, {P4, color_vertex, T4},
+		{P1, color_vertex, T1}, {P4, color_vertex, T4}, {P2, color_vertex, T2},
 
-			{P2,color_vertex,T1}, {P6,color_vertex,T2}, {P4,color_vertex,T3},
-			{P4,color_vertex,T3}, {P6,color_vertex,T2}, {P8,color_vertex,T4},
+		// BACK face (z = depth) - when looking from outside (towards +Z), map accordingly
+		{P6, color_vertex, T2}, {P8, color_vertex, T4}, {P7, color_vertex, T3},
+		{P6, color_vertex, T2}, {P7, color_vertex, T3}, {P5, color_vertex, T1},
 
-			{P6,color_vertex,T1}, {P5,color_vertex,T2}, {P8,color_vertex,T3},
-			{P8,color_vertex,T3}, {P5,color_vertex,T2}, {P7,color_vertex,T4},
+		// LEFT face (x = 0)
+		{P5, color_vertex, T1}, {P7, color_vertex, T3}, {P3, color_vertex, T3},
+		{P5, color_vertex, T1}, {P3, color_vertex, T3}, {P1, color_vertex, T1},
 
-			{P5,color_vertex,T1}, {P1,color_vertex,T2}, {P7,color_vertex,T3},
-			{P7,color_vertex,T3}, {P1,color_vertex,T2}, {P3,color_vertex,T4},
+		// RIGHT face (x = frameWidth)
+		{P2, color_vertex, T2}, {P4, color_vertex, T4}, {P8, color_vertex, T4},
+		{P2, color_vertex, T2}, {P8, color_vertex, T4}, {P6, color_vertex, T2},
 
-			{P5,color_vertex,T1}, {P6,color_vertex,T2}, {P1,color_vertex,T3},
-			{P1,color_vertex,T3}, {P6,color_vertex,T2}, {P2,color_vertex,T4},
+		// TOP face (y = 0)
+		{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
+		{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
 
-			{P3,color_vertex,T1}, {P4,color_vertex,T2}, {P7,color_vertex,T3},
-			{P7,color_vertex,T3}, {P4,color_vertex,T2}, {P8,color_vertex,T4}
+		// BOTTOM face (y = frameHeight)
+		{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
+		{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
 	};
 
-	memcpy(pNewVertices, Cube, 36 * sizeof(TLVERTEX));
+	memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
+
+	unsigned short indices[] =
+	{
+		// Front face
+		0, 1, 2, 0, 2, 3,
+		// Back face
+		4, 5, 6, 4, 6, 7,
+		// Left face
+		8, 9, 10, 8, 10, 11,
+		// Right face
+	   12,13,14,12,14,15,
+	   // Top face
+	   16,17,18,16,18,19,
+	   // Bottom face
+	   20,21,22,20,22,23
+	};
 	
 	return S_OK;
 }
