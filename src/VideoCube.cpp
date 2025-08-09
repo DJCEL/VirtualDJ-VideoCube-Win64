@@ -582,12 +582,12 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 		{P2, color_vertex, T3}, {P8, color_vertex, T2}, {P6, color_vertex, T4}, // FTR + BBR + BTR
 
 		// TOP face (y = 0)
-		{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
-		{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
+		{P5, color_vertex, T3}, {P1, color_vertex, T1}, {P2, color_vertex, T2}, // BTL + FTL + FTR
+		{P5, color_vertex, T3}, {P2, color_vertex, T2}, {P6, color_vertex, T4}, // BTL + FTR + BTR
 
 		// BOTTOM face (y = frameHeight)
-		{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
-		{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
+		{P3, color_vertex, T3}, {P7, color_vertex, T1}, {P8, color_vertex, T2}, // FBL + BBL + BBR
+		{P3, color_vertex, T3}, {P8, color_vertex, T2}, {P4, color_vertex, T4}  // FBL + BBR + FBR
 	};
 
 	memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
