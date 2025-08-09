@@ -8,13 +8,11 @@ CVideoCube::CVideoCube()
 	pVertexBuffer = nullptr;
 	pD3DRenderTargetView = nullptr;
 	pVertexShader = nullptr;
-	pIndexBuffer = nullptr;
 	pPixelShader = nullptr;
 	pConstantBuffer = nullptr;
 	pInputLayout = nullptr;
 	pRasterizerState = nullptr;
 	ZeroMemory(pNewVertices, 36 * sizeof(TLVERTEX));
-	ZeroMemory(pIndices, 36 * sizeof(UINT));
 	ZeroMemory(&m_ConstantBufferData, sizeof(VS_CONSTANTBUFFER));
 	ZeroMemory(&m_SliderValue, 4 * sizeof(float));
 	m_Direct3D_On = false;
@@ -24,7 +22,6 @@ CVideoCube::CVideoCube()
 	m_Height = 0;
 	m_Depth = 0;
 	m_VertexCount = 0;
-	m_IndexCount = 0;
 	m_Alpha = 1.0f;
 	m_Zoom = 0.0f;
 	m_Speed = 0.0f;
@@ -250,9 +247,6 @@ HRESULT CVideoCube::Initialize_D3D11(ID3D11Device* pDevice)
 	hr = Create_VertexShader_D3D11(pDevice);
 	if (hr != S_OK) return S_FALSE;
 
-	hr = Create_IndexBufferDynamic_D3D11(pDevice);
-	if (hr != S_OK) return S_FALSE;
-
 	hr = Create_PixelShader_D3D11(pDevice);
 	if (hr != S_OK) return S_FALSE;
 
@@ -274,7 +268,6 @@ HRESULT CVideoCube::Initialize_D3D11(ID3D11Device* pDevice)
 void CVideoCube::Release_D3D11()
 {
 	SAFE_RELEASE(pVertexShader);
-	SAFE_RELEASE(pIndexBuffer);
 	SAFE_RELEASE(pPixelShader);
 	SAFE_RELEASE(pInputLayout);
 	SAFE_RELEASE(pVertexBuffer);
@@ -368,11 +361,9 @@ HRESULT CVideoCube::Rendering_D3D11(ID3D11Device* pDevice, ID3D11DeviceContext* 
 		UINT m_VertexStride = sizeof(TLVERTEX);
 		UINT m_VertexOffset = 0;
 		pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &m_VertexStride, &m_VertexOffset);
-		//pDeviceContext->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0); // we use R32 car UNINT (for unsigned short, use R16)
 	}
 
 	pDeviceContext->Draw(m_VertexCount, 0);
-	//pDeviceContext->DrawIndexed(m_IndexCount, 0, 0);
 
 	return S_OK;
 }
@@ -400,32 +391,6 @@ HRESULT CVideoCube::Create_VertexBufferDynamic_D3D11(ID3D11Device* pDevice)
 	// Create the vertex buffer.
 	hr = pDevice->CreateBuffer(&VertexBufferDesc, nullptr, &pVertexBuffer);
 	if (hr != S_OK || !pVertexBuffer) return S_FALSE;
-
-	return S_OK;
-}
-// ---------------------------------------------------------------------- -
-HRESULT CVideoCube::Create_IndexBufferDynamic_D3D11(ID3D11Device* pDevice)
-{
-	HRESULT hr = S_FALSE;
-
-	if (!pDevice) return E_FAIL;
-
-	// Set the number of indices in the vertex array.
-	m_IndexCount = 36; // = ARRAYSIZE(pIndices);
-
-	// Fill in a buffer description.
-	D3D11_BUFFER_DESC IndexBufferDesc;
-	ZeroMemory(&IndexBufferDesc, sizeof(D3D11_BUFFER_DESC));
-	IndexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;   // CPU_Access=Write_Only & GPU_Access=Read_Only
-	IndexBufferDesc.ByteWidth = sizeof(UINT) * m_IndexCount;
-	IndexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER; // Use as indexed vertex buffer
-	IndexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; // Allow CPU to write in buffer
-	IndexBufferDesc.MiscFlags = 0;
-	IndexBufferDesc.StructureByteStride = sizeof(UINT);
-
-	// Create the index buffer.
-	hr = pDevice->CreateBuffer(&IndexBufferDesc, nullptr, &pIndexBuffer);
-	if (hr != S_OK || !pIndexBuffer) return S_FALSE;
 
 	return S_OK;
 }
@@ -555,28 +520,6 @@ HRESULT CVideoCube::Update_VertexBufferDynamic_D3D11(ID3D11DeviceContext* ctx)
 	return S_OK;
 }
 //-----------------------------------------------------------------------
-HRESULT CVideoCube::Update_IndexBufferDynamic_D3D11(ID3D11DeviceContext* ctx)
-{
-	HRESULT hr = S_FALSE;
-
-	if (!ctx) return S_FALSE;
-	if (!pIndexBuffer) return S_FALSE;
-
-	hr = Update_Indices_D3D11();
-
-	D3D11_MAPPED_SUBRESOURCE MappedSubResource;
-	ZeroMemory(&MappedSubResource, sizeof(D3D11_MAPPED_SUBRESOURCE));
-
-	hr = ctx->Map(pIndexBuffer, NULL, D3D11_MAP_WRITE_DISCARD, 0, &MappedSubResource);
-	if (hr != S_OK) return S_FALSE;
-
-	memcpy(MappedSubResource.pData, pIndices, m_IndexCount * sizeof(UINT));
-
-	ctx->Unmap(pIndexBuffer, NULL);
-
-	return S_OK;
-}
-//-----------------------------------------------------------------------
 HRESULT CVideoCube::Update_ConstantBufferDynamic_D3D11(ID3D11DeviceContext* ctx)
 {
 	HRESULT hr = S_FALSE;
@@ -604,7 +547,6 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 	float frameWidth = (float) m_Width;
 	float frameHeight = (float) m_Height;
 	float frameDepth = (float) m_Depth;
-	bool inverted_texture = true; // if VertexShader is used then "true" otherwise "false"
 
 	D3DXPOSITION P1 = { 0.0f, 0.0f, 0.0f }, // FTL : Front Top Left (0,0,0)
 		P2 = { frameWidth, 0.0f, 0.0f }, // FTR: Front Top Right (w,0,0)
@@ -621,90 +563,37 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 		T3 = { 0.0f , 1.0f },
 		T4 = { 1.0f , 1.0f };
 	
-	if (inverted_texture)
-	{
-		TLVERTEX Cube[36] = {
-			// FRONT face (z = 0)
-			{P1, color_vertex, T3}, {P3, color_vertex, T1}, {P4, color_vertex, T2}, // FTL + FBL + FBR
-			{P1, color_vertex, T3}, {P4, color_vertex, T2}, {P2, color_vertex, T4}, // FTL + FBR + FTR
 
-			// BACK face (z = frameDepth)
-			{P6, color_vertex, T3}, {P8, color_vertex, T1}, {P7, color_vertex, T2}, // BTR + BBR + BBL
-			{P6, color_vertex, T3}, {P7, color_vertex, T2}, {P5, color_vertex, T4}, // BTR + BBL + BTL
+	TLVERTEX Cube[36] = {
+		// FRONT face (z = 0)
+		{P1, color_vertex, T3}, {P3, color_vertex, T1}, {P4, color_vertex, T2}, // FTL + FBL + FBR
+		{P1, color_vertex, T3}, {P4, color_vertex, T2}, {P2, color_vertex, T4}, // FTL + FBR + FTR
 
-			// LEFT face (x = 0)
-			{P5, color_vertex, T3}, {P7, color_vertex, T1}, {P3, color_vertex, T2}, // BTL + BBL + FBL
-			{P5, color_vertex, T3}, {P3, color_vertex, T2}, {P1, color_vertex, T4}, // BTL + FBL + FTL
+		// BACK face (z = frameDepth)
+		{P6, color_vertex, T3}, {P8, color_vertex, T1}, {P7, color_vertex, T2}, // BTR + BBR + BBL
+		{P6, color_vertex, T3}, {P7, color_vertex, T2}, {P5, color_vertex, T4}, // BTR + BBL + BTL
 
-			// RIGHT face (x = frameWidth)
-			{P2, color_vertex, T3}, {P4, color_vertex, T1}, {P8, color_vertex, T2}, // FTR + FBR + BBR
-			{P2, color_vertex, T3}, {P8, color_vertex, T2}, {P6, color_vertex, T4}, // FTR + BBR + BTR
+		// LEFT face (x = 0)
+		{P5, color_vertex, T3}, {P7, color_vertex, T1}, {P3, color_vertex, T2}, // BTL + BBL + FBL
+		{P5, color_vertex, T3}, {P3, color_vertex, T2}, {P1, color_vertex, T4}, // BTL + FBL + FTL
 
-			// TOP face (y = 0)
-			{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
-			{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
+		// RIGHT face (x = frameWidth)
+		{P2, color_vertex, T3}, {P4, color_vertex, T1}, {P8, color_vertex, T2}, // FTR + FBR + BBR
+		{P2, color_vertex, T3}, {P8, color_vertex, T2}, {P6, color_vertex, T4}, // FTR + BBR + BTR
 
-			// BOTTOM face (y = frameHeight)
-			{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
-			{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
-		};
+		// TOP face (y = 0)
+		{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
+		{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
 
-		memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
-	}
-	else
-	{
-		TLVERTEX Cube[36] = {
-			// FRONT face (z = 0)
-			{P1, color_vertex, T1}, {P3, color_vertex, T3}, {P4, color_vertex, T4},
-			{P1, color_vertex, T1}, {P4, color_vertex, T4}, {P2, color_vertex, T2},
-
-			// BACK face (z = frameDepth)
-			{P6, color_vertex, T2}, {P8, color_vertex, T4}, {P7, color_vertex, T3},
-			{P6, color_vertex, T2}, {P7, color_vertex, T3}, {P5, color_vertex, T1},
-
-			// LEFT face (x = 0)
-			{P5, color_vertex, T1}, {P7, color_vertex, T3}, {P3, color_vertex, T3},
-			{P5, color_vertex, T1}, {P3, color_vertex, T3}, {P1, color_vertex, T1},
-
-			// RIGHT face (x = frameWidth)
-			{P2, color_vertex, T2}, {P4, color_vertex, T4}, {P8, color_vertex, T4},
-			{P2, color_vertex, T2}, {P8, color_vertex, T4}, {P6, color_vertex, T2},
-
-			// TOP face (y = 0)
-			{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
-			{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
-
-			// BOTTOM face (y = frameHeight)
-			{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
-			{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
-		};
-
-		memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
-	}
-	
-	return S_OK;
-}
-//-----------------------------------------------------------------------
-HRESULT CVideoCube::Update_Indices_D3D11()
-{
-	UINT indicesCube[36] =
-	{
-		// Front face
-		0, 1, 2, 0, 2, 3,
-		// Back face
-		4, 5, 6, 4, 6, 7,
-		// Left face
-		8, 9, 10, 8, 10, 11,
-		// Right face
-	   12,13,14,12,14,15,
-	   // Top face
-	   16,17,18,16,18,19,
-	   // Bottom face
-	   20,21,22,20,22,23
+		// BOTTOM face (y = frameHeight)
+		{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
+		{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
 	};
 
-	memcpy(pIndices, indicesCube, m_IndexCount * sizeof(UINT));
+	memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
+	
 
+	
 	return S_OK;
 }
 //-----------------------------------------------------------------------
