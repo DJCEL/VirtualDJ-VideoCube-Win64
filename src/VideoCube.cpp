@@ -296,7 +296,7 @@ HRESULT CVideoCube::Rendering_D3D11(ID3D11Device* pDevice, ID3D11DeviceContext* 
 		D3DXCOLOR Color;
 		if (m_BackgroundColor == 1) Color = D3DXCOLOR(0.0f, 0.0f, 0.0f, 1.0f);
 		else if (m_BackgroundColor == 2) Color = D3DXCOLOR(0.1f, 0.2f, 0.6f, 1.0f);
-		else if (m_BackgroundColor == 3) Color = D3DXCOLOR(1.10f, 1.0f, 1.0f, 1.0f);
+		else if (m_BackgroundColor == 3) Color = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
 		else Color = D3DXCOLOR(0.0f, 0.0f, 0.0f, 1.0f);
 
 		FLOAT ColorRGBA[4] = {Color.r, Color.g, Color.b, Color.a};
