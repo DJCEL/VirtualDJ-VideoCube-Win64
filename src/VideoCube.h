@@ -134,6 +134,7 @@ private:
 	int m_HeightOnDeviceInit;
 	int m_Width;
 	int m_Height;
+	int m_Depth;
 	float m_SliderValue[4];
 	float m_Alpha;
 	float m_Zoom;

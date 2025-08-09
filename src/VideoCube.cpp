@@ -22,6 +22,7 @@ CVideoCube::CVideoCube()
 	m_HeightOnDeviceInit = 0;
 	m_Width = 0;
 	m_Height = 0;
+	m_Depth = 0;
 	m_VertexCount = 0;
 	m_IndexCount = 0;
 	m_Alpha = 1.0f;
@@ -165,6 +166,7 @@ HRESULT VDJ_API CVideoCube::OnDeviceInit()
 	m_HeightOnDeviceInit = height;
 	m_Width = width;
 	m_Height = height;
+	m_Depth = width;
 
 	// GetDevice() doesn't AddRef(), so we don't need to release pD3DDevice later
 	hr = GetDevice(VdjVideoEngineDirectX11, (void**)  &pD3DDevice);
@@ -238,6 +240,7 @@ void CVideoCube::OnResizeVideo()
 
 	m_Width = width;
 	m_Height = height;
+	m_Depth = width;
 }
 //-----------------------------------------------------------------------
 HRESULT CVideoCube::Initialize_D3D11(ID3D11Device* pDevice)
@@ -517,11 +520,10 @@ HRESULT CVideoCube::Create_RasterizerState_D3D11(ID3D11Device* pDevice)
 {
 	HRESULT hr;
 
-	// Use back-face culling and counter-clockwise vertices are considered front-facing
 	D3D11_RASTERIZER_DESC RasterizerDesc;
 	ZeroMemory(&RasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 	RasterizerDesc.FillMode = D3D11_FILL_SOLID;
-	RasterizerDesc.CullMode = D3D11_CULL_NONE; // cull back faces (D3D11_CULL_FRONT or D3D11_CULL_BACK or D3D11_CULL_NONE); 
+	RasterizerDesc.CullMode = D3D11_CULL_FRONT; // cull front faces (D3D11_CULL_FRONT or D3D11_CULL_BACK or D3D11_CULL_NONE); 
 	RasterizerDesc.FrontCounterClockwise = TRUE; // CCW = front
 	RasterizerDesc.DepthClipEnable = FALSE;
 
@@ -601,54 +603,85 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 {
 	float frameWidth = (float) m_Width;
 	float frameHeight = (float) m_Height;
-	float depth = frameWidth; // we use frameWidth as depth
+	float frameDepth = (float) m_Depth;
+	bool inverted_texture = true; // if VertexShader is used then "true" otherwise "false"
 
-	D3DXPOSITION P1 = { 0.0f, 0.0f, 0.0f }, // Top Left - Front (0,0,0)
-		P2 = { frameWidth, 0.0f, 0.0f }, // Top Right - Front (w,0,0)
-		P3 = { 0.0f, frameHeight, 0.0f }, // Bottom Left - Front (0,h,0)
-		P4 = { frameWidth, frameHeight, 0.0f }, // Bottom Right - Front (w,h,0)
-		P5 = { 0.0f, 0.0f, depth }, // Top Left - Back (0,0,d)
-		P6 = { frameWidth, 0.0f, depth }, // Top Right - Back (w,0,d)
-		P7 = { 0.0f, frameHeight, depth }, // Bottom Left - Back (0,h,d)
-		P8 = { frameWidth, frameHeight, depth }; // Bottom Right - Back (w,h,d)
+	D3DXPOSITION P1 = { 0.0f, 0.0f, 0.0f }, // FTL : Front Top Left (0,0,0)
+		P2 = { frameWidth, 0.0f, 0.0f }, // FTR: Front Top Right (w,0,0)
+		P3 = { 0.0f, frameHeight, 0.0f }, // FBL: Front Bottom Left (0,h,0)
+		P4 = { frameWidth, frameHeight, 0.0f }, // FBR: Front Bottom Right (w,h,0)
+		P5 = { 0.0f, 0.0f, frameDepth }, // BTL: Back Top Left (0,0,d)
+		P6 = { frameWidth, 0.0f, frameDepth }, // BTR: Back Top Right (w,0,d) - 
+		P7 = { 0.0f, frameHeight, frameDepth }, // BBL: Back Bottom Left (0,h,d)
+		P8 = { frameWidth, frameHeight, frameDepth }; // BBR: Back Bottom Right (w,h,d)
+
 	D3DXCOLOR color_vertex = D3DXCOLOR(1.0f, 1.0f, 1.0f, m_Alpha); // white color with alpha
 	D3DXTEXCOORD T1 = { 0.0f , 0.0f },
 		T2 = { 1.0f , 0.0f },
 		T3 = { 0.0f , 1.0f },
 		T4 = { 1.0f , 1.0f };
 	
+	if (inverted_texture)
+	{
+		TLVERTEX Cube[36] = {
+			// FRONT face (z = 0)
+			{P1, color_vertex, T3}, {P3, color_vertex, T1}, {P4, color_vertex, T2}, // FTL + FBL + FBR
+			{P1, color_vertex, T3}, {P4, color_vertex, T2}, {P2, color_vertex, T4}, // FTL + FBR + FTR
 
-	// We use COUNTER-CLOCKWISE (CCW) winding for front faces (matches RasterizerDesc.FrontCounterClockwise = TRUE)
-	// Each face is two triangles, made with CCW vertex order as seen from outside the cube.
+			// BACK face (z = frameDepth)
+			{P6, color_vertex, T3}, {P8, color_vertex, T1}, {P7, color_vertex, T2}, // BTR + BBR + BBL
+			{P6, color_vertex, T3}, {P7, color_vertex, T2}, {P5, color_vertex, T4}, // BTR + BBL + BTL
 
-	TLVERTEX Cube[36] = {
-		// FRONT face (z = 0) - looking from outside (towards -Z) the CCW order is TL, BL, BR then TL, BR, TR
-		{P1, color_vertex, T1}, {P3, color_vertex, T3}, {P4, color_vertex, T4},
-		{P1, color_vertex, T1}, {P4, color_vertex, T4}, {P2, color_vertex, T2},
+			// LEFT face (x = 0)
+			{P5, color_vertex, T3}, {P7, color_vertex, T1}, {P3, color_vertex, T2}, // BTL + BBL + FBL
+			{P5, color_vertex, T3}, {P3, color_vertex, T2}, {P1, color_vertex, T4}, // BTL + FBL + FTL
 
-		// BACK face (z = depth) - when looking from outside (towards +Z), map accordingly
-		{P6, color_vertex, T2}, {P8, color_vertex, T4}, {P7, color_vertex, T3},
-		{P6, color_vertex, T2}, {P7, color_vertex, T3}, {P5, color_vertex, T1},
+			// RIGHT face (x = frameWidth)
+			{P2, color_vertex, T3}, {P4, color_vertex, T1}, {P8, color_vertex, T2}, // FTR + FBR + BBR
+			{P2, color_vertex, T3}, {P8, color_vertex, T2}, {P6, color_vertex, T4}, // FTR + BBR + BTR
 
-		// LEFT face (x = 0)
-		{P5, color_vertex, T1}, {P7, color_vertex, T3}, {P3, color_vertex, T3},
-		{P5, color_vertex, T1}, {P3, color_vertex, T3}, {P1, color_vertex, T1},
+			// TOP face (y = 0)
+			{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
+			{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
 
-		// RIGHT face (x = frameWidth)
-		{P2, color_vertex, T2}, {P4, color_vertex, T4}, {P8, color_vertex, T4},
-		{P2, color_vertex, T2}, {P8, color_vertex, T4}, {P6, color_vertex, T2},
+			// BOTTOM face (y = frameHeight)
+			{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
+			{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
+		};
 
-		// TOP face (y = 0)
-		{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
-		{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
+		memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
+	}
+	else
+	{
+		TLVERTEX Cube[36] = {
+			// FRONT face (z = 0)
+			{P1, color_vertex, T1}, {P3, color_vertex, T3}, {P4, color_vertex, T4},
+			{P1, color_vertex, T1}, {P4, color_vertex, T4}, {P2, color_vertex, T2},
 
-		// BOTTOM face (y = frameHeight)
-		{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
-		{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
-	};
+			// BACK face (z = frameDepth)
+			{P6, color_vertex, T2}, {P8, color_vertex, T4}, {P7, color_vertex, T3},
+			{P6, color_vertex, T2}, {P7, color_vertex, T3}, {P5, color_vertex, T1},
 
-	memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
+			// LEFT face (x = 0)
+			{P5, color_vertex, T1}, {P7, color_vertex, T3}, {P3, color_vertex, T3},
+			{P5, color_vertex, T1}, {P3, color_vertex, T3}, {P1, color_vertex, T1},
 
+			// RIGHT face (x = frameWidth)
+			{P2, color_vertex, T2}, {P4, color_vertex, T4}, {P8, color_vertex, T4},
+			{P2, color_vertex, T2}, {P8, color_vertex, T4}, {P6, color_vertex, T2},
+
+			// TOP face (y = 0)
+			{P5, color_vertex, T1}, {P6, color_vertex, T2}, {P2, color_vertex, T2},
+			{P5, color_vertex, T1}, {P2, color_vertex, T2}, {P1, color_vertex, T1},
+
+			// BOTTOM face (y = frameHeight)
+			{P3, color_vertex, T3}, {P7, color_vertex, T3}, {P8, color_vertex, T4},
+			{P3, color_vertex, T3}, {P8, color_vertex, T4}, {P4, color_vertex, T4}
+		};
+
+		memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
+	}
+	
 	return S_OK;
 }
 //-----------------------------------------------------------------------
@@ -851,7 +884,7 @@ DirectX::XMMATRIX CVideoCube::SetWorldMatrix_D3D11()
 	}
 
 	// Center point of the rotation
-	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , (float) m_Width / 2.0f };
+	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , (float) m_Depth / 2.0f };
 
 	DirectX::XMMATRIX TranslationMatrix1 = DirectX::XMMatrixTranslation(-Co.x, -Co.y, -Co.z);
 	DirectX::XMMATRIX TranslationMatrix2 = DirectX::XMMatrixTranslation(Co.x, Co.y, Co.z);
