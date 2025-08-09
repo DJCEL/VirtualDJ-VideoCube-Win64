@@ -97,7 +97,7 @@ void CVideoCube::OnSlider(int id)
 	switch (id)
 	{
 		case ID_SLIDER_1:
-			m_Alpha = m_SliderValue[0];
+			m_Alpha = 1.0f - m_SliderValue[0];
 			break;
 
 		case ID_SLIDER_2:
@@ -130,7 +130,7 @@ HRESULT VDJ_API CVideoCube::OnGetParameterString(int id, char* outParam, int out
 	switch (id)
 	{
 		case ID_SLIDER_1:
-			sprintf_s(outParam, outParamSize, "%.0f%%", m_Alpha * 100.0f);
+			sprintf_s(outParam, outParamSize, "%.0f%%", (1.0f - m_Alpha) * 100.0f);
 			break;
 
 		case ID_SLIDER_2:
