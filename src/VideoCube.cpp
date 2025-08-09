@@ -14,7 +14,7 @@ CVideoCube::CVideoCube()
 	pRasterizerState = nullptr;
 	ZeroMemory(pNewVertices, 36 * sizeof(TLVERTEX));
 	ZeroMemory(&m_ConstantBufferData, sizeof(VS_CONSTANTBUFFER));
-	ZeroMemory(&m_SliderValue, 4 * sizeof(float));
+	ZeroMemory(&m_SliderValue, 7 * sizeof(float));
 	m_Direct3D_On = false;
 	m_WidthOnDeviceInit = 0;
 	m_HeightOnDeviceInit = 0;
@@ -25,6 +25,9 @@ CVideoCube::CVideoCube()
 	m_Alpha = 1.0f;
 	m_Zoom = 0.0f;
 	m_Speed = 0.0f;
+	m_CamX = 0.0f;
+	m_CamY = 0.0f;
+	m_CamZ = 0.0f;
 	m_RotationAxe = 0;
 	m_RotationInverted = 0;
 	m_RotationDisk = 0;
@@ -32,6 +35,7 @@ CVideoCube::CVideoCube()
 	m_Angle = 0;
 	m_HoldDisk = 0;
 	m_Beats = 0;
+	m_RealCube = 0;
 }
 //------------------------------------------------------------------------------------------
 CVideoCube::~CVideoCube()
@@ -44,9 +48,12 @@ HRESULT VDJ_API CVideoCube::OnLoad()
 	HRESULT hr = S_FALSE;
 
 	hr = DeclareParameterSlider(&m_SliderValue[0], ID_SLIDER_1, "Transparency", "TR", 0.0f);
-	hr = DeclareParameterSlider(&m_SliderValue[1], ID_SLIDER_2, "Zoom", "ZOOM", 0.14f);
+	hr = DeclareParameterSlider(&m_SliderValue[1], ID_SLIDER_2, "Projection", "PROJ", 0.14f);
 	hr = DeclareParameterSlider(&m_SliderValue[2], ID_SLIDER_3, "Speed", "SPEED", 0.08f);
 	hr = DeclareParameterSlider(&m_SliderValue[3], ID_SLIDER_4, "BackgroundColor", "COLR", 0.25f);
+	hr = DeclareParameterSlider(&m_SliderValue[4], ID_SLIDER_5, "Camera X", "CAMX", 0.5f);
+	hr = DeclareParameterSlider(&m_SliderValue[5], ID_SLIDER_6, "Camera Y", "CAMY", 0.5f);
+	hr = DeclareParameterSlider(&m_SliderValue[6], ID_SLIDER_7, "Camera Z", "CAMZ", 0.1f);
 	hr = DeclareParameterRadio(&m_RotationAxe, ID_RADIO_1, "Rotation X", "ROTX", 0.0f);
 	hr = DeclareParameterRadio(&m_RotationAxe, ID_RADIO_2, "Rotation Y", "ROTY", 1.0f);
 	hr = DeclareParameterRadio(&m_RotationAxe, ID_RADIO_3, "Rotation Z", "ROTZ", 0.0f);
@@ -54,6 +61,7 @@ HRESULT VDJ_API CVideoCube::OnLoad()
 	hr = DeclareParameterSwitch(&m_RotationDisk, ID_SWITCH_2, "Scratch", "S", 0.0f);
 	hr = DeclareParameterSwitch(&m_HoldDisk, ID_SWITCH_3, "Scratch Hold", "SH", 0.0f);
 	hr = DeclareParameterSwitch(&m_Beats, ID_SWITCH_4, "Beats", "B", 0.0f);
+	hr = DeclareParameterSwitch(&m_RealCube, ID_SWITCH_5, "RealCube", "RC", 0.0f);
 	
 	hr = OnParameter(ID_INIT);
 
@@ -81,7 +89,7 @@ HRESULT VDJ_API CVideoCube::OnParameter(int id)
 {
 	if (id == ID_INIT)
 	{
-		for (int i = ID_SLIDER_1; i <= ID_SLIDER_4; i++) OnSlider(i);
+		for (int i = ID_SLIDER_1; i <= ID_SLIDER_7; i++) OnSlider(i);
 	}
 	else OnSlider(id);
 
@@ -121,6 +129,19 @@ void CVideoCube::OnSlider(int id)
 			else if (m_SliderValue[3] >= 0.5f && m_SliderValue[3] < 0.75f) m_BackgroundColor = 2;
 			else m_BackgroundColor = 3;
 			break;
+
+		case ID_SLIDER_5:
+			m_CamX = (2.0f * m_SliderValue[4] - 1.0f) * 2.0f;
+			break;
+
+		case ID_SLIDER_6:
+			m_CamY = (2.0f * m_SliderValue[5] - 1.0f) * 2.0f;
+			break;
+
+		case ID_SLIDER_7:
+			if (m_SliderValue[6] == 0.0f) m_CamZ = 0.0f;
+			else m_CamZ = (-1.0f) * m_SliderValue[6];
+			break;
 	}
 
 }
@@ -148,6 +169,18 @@ HRESULT VDJ_API CVideoCube::OnGetParameterString(int id, char* outParam, int out
 			else if (m_BackgroundColor == 1) sprintf_s(outParam, outParamSize, "Black");
 			else if (m_BackgroundColor == 2) sprintf_s(outParam, outParamSize, "Blue");
 			else sprintf_s(outParam, outParamSize, "White");
+			break;
+
+		case ID_SLIDER_5:
+			sprintf_s(outParam, outParamSize, "%.2f", m_CamX);
+			break;
+
+		case ID_SLIDER_6:
+			sprintf_s(outParam, outParamSize, "%.2f", m_CamY);
+			break;
+
+		case ID_SLIDER_7:
+			sprintf_s(outParam, outParamSize, "%.2f", m_CamZ);
 			break;
 	}
 
@@ -545,7 +578,7 @@ HRESULT CVideoCube::Update_ConstantBufferDynamic_D3D11(ID3D11DeviceContext* ctx)
 HRESULT CVideoCube::Update_NewVertices_D3D11()
 {
 	float frameWidth = (float) m_Width;
-	float frameHeight = (float) m_Height;
+	float frameHeight = m_RealCube ? frameWidth : (float) m_Height;
 	float frameDepth = (float) m_Depth;
 
 	D3DXPOSITION P1 = { 0.0f, 0.0f, 0.0f }, // FTL : Front Top Left (0,0,0)
@@ -563,6 +596,8 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 		T3 = { 0.0f , 1.0f },
 		T4 = { 1.0f , 1.0f };
 	
+
+	// Texture is vertically inverted here.
 
 	TLVERTEX Cube[36] = {
 		// FRONT face (z = 0)
@@ -591,8 +626,6 @@ HRESULT CVideoCube::Update_NewVertices_D3D11()
 	};
 
 	memcpy(pNewVertices, Cube, m_VertexCount * sizeof(TLVERTEX));
-	
-
 	
 	return S_OK;
 }
@@ -668,12 +701,16 @@ HRESULT CVideoCube::ReadResource(const WCHAR* resourceType, const WCHAR* resourc
 //-----------------------------------------------------------------------
 DirectX::XMMATRIX CVideoCube::SetViewMatrix_D3D11()
 {
-	float cam_posX = (float) m_Width / 2.0f;
-	float cam_posY = (float) m_Height / 2.0f;
-	float cam_posZ = (float)(max(m_Width, m_Height) + 100.0f) * (-1.0f);  // Z is negative because we are looking at the origin from above
+	float frameWidth = (float)m_Width;
+	float frameHeight = m_RealCube ? frameWidth : (float)m_Height;
+	float maxDepth = max(frameWidth, frameHeight);
 
-	float cam_tgtX = (float) m_Width / 2.0f;
-	float cam_tgtY = (float) m_Height / 2.0f;
+	float cam_posX = ( 0.5f + m_CamX) * frameWidth;
+	float cam_posY = ( 0.5f + m_CamY) * frameHeight;
+	float cam_posZ = (-1.0f + m_CamZ) * maxDepth;  // Z is negative because we are looking at the origin from above
+
+	float cam_tgtX = frameWidth * 0.5f;
+	float cam_tgtY = frameHeight * 0.5f;
 	float cam_tgtZ = 0.0f;
 
 	//Camera information
@@ -773,7 +810,11 @@ DirectX::XMMATRIX CVideoCube::SetWorldMatrix_D3D11()
 	}
 
 	// Center point of the rotation
-	D3DXPOSITION Co = { (float) m_Width / 2.0f , (float) m_Height / 2.0f , (float) m_Depth / 2.0f };
+	float frameWidth = (float)m_Width;
+	float frameHeight = m_RealCube ? frameWidth : (float)m_Height;
+	float frameDepth = (float)m_Depth;
+
+	D3DXPOSITION Co = { frameWidth * 0.5f , frameHeight * 0.5f , frameDepth * 0.5f };
 
 	DirectX::XMMATRIX TranslationMatrix1 = DirectX::XMMatrixTranslation(-Co.x, -Co.y, -Co.z);
 	DirectX::XMMATRIX TranslationMatrix2 = DirectX::XMMatrixTranslation(Co.x, Co.y, Co.z);

@@ -129,17 +129,21 @@ private:
 	int m_Width;
 	int m_Height;
 	int m_Depth;
-	float m_SliderValue[4];
+	float m_SliderValue[7];
 	float m_Alpha;
 	float m_Zoom;
 	float m_Speed;
 	float m_Angle;
+	float m_CamX;
+	float m_CamY;
+	float m_CamZ;
 	int m_RotationAxe;
 	int m_RotationInverted;
 	int m_RotationDisk;
 	int m_BackgroundColor;
 	int m_HoldDisk;
 	int m_Beats;
+	int m_RealCube;
 
 	typedef enum _ID_Interface
 	{
@@ -148,13 +152,17 @@ private:
 		ID_SLIDER_2,
 		ID_SLIDER_3,
 		ID_SLIDER_4,
+		ID_SLIDER_5,
+		ID_SLIDER_6,
+		ID_SLIDER_7,
 		ID_RADIO_1,
 		ID_RADIO_2,
 		ID_RADIO_3,
 		ID_SWITCH_1,
 		ID_SWITCH_2,
 		ID_SWITCH_3,
-		ID_SWITCH_4
+		ID_SWITCH_4,
+		ID_SWITCH_5
 	} ID_Interface;
 
 	const float MAX_BEATS = 64.0f;
